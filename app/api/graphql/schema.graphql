@@ -1,0 +1,20 @@
+type User {
+    id: ID!
+    username: String!
+    firstName: String
+    lastName: String
+    avatar: String
+    about: String
+    role: String!
+}
+
+type Query {
+    users(
+        ids: [ID],
+        usernames: [String],
+        first_names: [String],
+        last_names: [String],
+        roles: [String],
+        is_banned: Boolean
+    ): [User]
+}
