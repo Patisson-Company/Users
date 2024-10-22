@@ -1,15 +1,20 @@
+import enum
 import re
+from datetime import datetime
 
 from db.base import Base
 from passlib.context import CryptContext
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import relationship, validates
 from ulid import ULID
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+from patisson_request.errors import ValidateError
 
 def ulid() -> str:
     return str(ULID())
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
 
 
 class User(Base):
@@ -33,7 +38,7 @@ class User(Base):
         )
         if (not regex.match(password) or sum(c.isalpha() for c in password) 
             <= sum(c.isdigit() for c in password)):
-            raise ValueError(f'the password is invalid')
+            raise ValidateError(f'the password is invalid')
         self.password = pwd_context.hash(password)
 
     def check_password(self, password: str) -> bool:
@@ -42,29 +47,34 @@ class User(Base):
     @validates("username")
     def validate_username(self, key, value: str):
         if not re.match(r'^[A-Za-z]{3}[A-Za-z0-9]{1,21}$', value):
-            raise ValueError(f'the username ({value}) is invalid')
+            raise ValidateError(f'the username ({value}) is invalid')
         return value
     
     @validates('first_name')
     def validate_first_name(self, key, value: str):
         if not re.match(r'^[A-Za-z]{2,18}$', value):
-            raise ValueError(f"the first name ({value}) is invalid")
+            raise ValidateError(f"the first name ({value}) is invalid")
         return value.capitalize()
     
     @validates('last_name')
     def validate_last_name(self, key, value: str):
         if not re.match(r'^[A-Za-z]{2,18}$', value):
-            raise ValueError(f"the last name ({value}) is invalid")
+            raise ValidateError(f"the last name ({value}) is invalid")
         return value.capitalize()
     
     
 class Library(Base):
     __tablename__ = 'libraries'
     
+    class Status(enum.Enum):
+        PLANNING = 0
+        READING = 1
+        FINISHED = 2
+    
     id = Column(String, primary_key=True, default=ulid)
-    book_id = Column(String, index=True)
+    book_id = Column(String, nullable=False)
     user_id = Column(String, ForeignKey('users.id'), nullable=False)
-    status = Column(String, nullable=False)
+    status = Column(Enum(Status), nullable=False)
     
     user = relationship('User', back_populates='library')
     
@@ -72,10 +82,19 @@ class Library(Base):
 class Ban(Base):
     __tablename__ = 'bans'
     
+    class Reason(enum.Enum):
+        INAPPROPRIATE_BEHAVIOR = 0
+    
     id = Column(String, primary_key=True, default=ulid)
     user_id = Column(String, ForeignKey('users.id'), nullable=False)
-    reason = Column(String, nullable=False)
+    reason = Column(Enum(Reason), nullable=False)
     comment = Column(Text)
     end_date = Column(DateTime)
     
     user = relationship('User', back_populates='ban')
+    
+    @validates('end_date')
+    def validate_end_date(self, key, value: datetime):
+        if value < datetime.now():
+            raise ValidateError(f'The end date of the ban must be greater than the current time (recived {value})')
+        return value

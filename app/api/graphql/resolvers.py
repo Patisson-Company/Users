@@ -2,7 +2,7 @@ from typing import Optional
 
 from ariadne import QueryType
 from db.crud import users_ban_subquery
-from db.models import User
+from db.models import Library, User
 from graphql import GraphQLResolveInfo
 from patisson_graphql.selected_fields import selected_fields
 from patisson_graphql.stmt_filter import Stmt
@@ -45,5 +45,29 @@ async def users(_, info: GraphQLResolveInfo,
     result = await db.execute(stmt())
     return result.fetchall()
 
+
+@query.field("libraries")
+async def libraries(_, info: GraphQLResolveInfo,
+                    ids: Optional[list[str]] = None,
+                    user_ids: Optional[list[str]] = None,
+                    book_ids: Optional[list[str]] = None,
+                    statuses: Optional[list[str]] = None,
+                    offset: Optional[int] = None,
+                    limit: Optional[int] = 10):
+    db: AsyncSession = info.context["db"]
+    
+    stmt_selected_fields = selected_fields(info, Library)
+    stmt = (
+        Stmt(
+            select(*stmt_selected_fields)
+            )
+        .con_filter(Library.id, ids)
+        .con_filter(Library.user_id, user_ids)
+        .con_filter(Library.book_id, book_ids)
+        .con_filter(Library.status, statuses)
+        .offset(offset).limit(limit).ordered_by(Library.id)
+    )
+    result = await db.execute(stmt())
+    return result.fetchall()
 
 resolvers = [query]

@@ -8,6 +8,13 @@ type User {
     role: String!
 }
 
+type Library {
+    id: ID!
+    user_id: String
+    book_id: String
+    status: String
+}
+
 type Query {
     users(
         ids: [ID],
@@ -15,6 +22,15 @@ type Query {
         first_names: [String],
         last_names: [String],
         roles: [String],
-        is_banned: Boolean
+        is_banned: Boolean,
+        offset: Int,
+        limit: Int
     ): [User]
+    
+    libraries(
+        ids: [ID],
+        user_ids: [String],
+        book_ids: [String],
+        statuses: [String]
+    )
 }

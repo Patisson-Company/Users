@@ -1,15 +1,12 @@
+from datetime import datetime
 from typing import Literal, Optional
 
-import patisson_errors
-from ariadne import MutationType, QueryType
-from db.models import Ban, User
-from graphql import GraphQLResolveInfo
-from patisson_graphql.selected_fields import selected_fields
-from patisson_graphql.stmt_filter import Stmt
+from db.models import Ban, Library, User
 from sqlalchemy import and_, case, func, or_, select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from patisson_request.errors import ErrorCode, ErrorSchema, ValidateError
 
 
 def users_ban_subquery():
@@ -39,7 +36,7 @@ async def create_user(session: AsyncSession, role: str,
                       about: Optional[str] = None,
                       ) -> (
                           tuple[Literal[True], User]
-                          | tuple[Literal[False], patisson_errors.ErrorSchema]
+                          | tuple[Literal[False], ErrorSchema]
                       ):
     '''
     Makes an asynchronous request to the database. 
@@ -59,15 +56,84 @@ async def create_user(session: AsyncSession, role: str,
     
     except SQLAlchemyError as e:
         await session.rollback()
-        return False, patisson_errors.ErrorSchema(
-            error=patisson_errors.ErrorCode.ACCESS_ERROR,
+        return False, ErrorSchema(
+            error=ErrorCode.ACCESS_ERROR,
             extra=str(e)
         )
         
-    except ValueError as e:  # sqlalchemy model validators
-        return False, patisson_errors.ErrorSchema(
-            error=patisson_errors.ErrorCode.JWT_EXPIRED,
+    except ValidateError as e: 
+        return False, ErrorSchema(
+            error=ErrorCode.JWT_EXPIRED,
             extra=str(e)
         )
         
+
+async def create_library(session: AsyncSession, book_id: str,
+                         user_id: str, status: Library.Status) -> (
+                          tuple[Literal[True], Library]
+                          | tuple[Literal[False], ErrorSchema]
+                      ):
+    try:
+        library = Library(
+            book_id=book_id, user_id=user_id,
+            status=status
+        )
+        session.add(library)
+        await session.commit()
+        return True, library
     
+    except IntegrityError:
+        await session.rollback()
+        return False, ErrorSchema(
+            error=ErrorCode.ACCESS_ERROR,
+            extra=f'The user ({user_id}) was not found'
+        )
+        
+    except SQLAlchemyError as e:
+        await session.rollback()
+        return False, ErrorSchema(
+            error=ErrorCode.ACCESS_ERROR,
+            extra=str(e)
+        )
+    
+    except ValidateError as e: 
+        await session.rollback()
+        return False, ErrorSchema(
+            error=ErrorCode.JWT_EXPIRED,
+            extra=str(e)
+        )
+
+
+async def create_ban(session: AsyncSession, user_id: str,
+                     reason: Ban.Reason, comment: str, end_date: datetime) -> ( 
+                        tuple[Literal[True], User]
+                        | tuple[Literal[False], ErrorSchema]
+                      ):
+    try:
+        ban = Ban(
+            user_id=user_id, reason=reason, 
+            comment=comment, end_date=end_date
+        )
+        session.add(ban)
+        await session.commit()
+        return True, ban
+    
+    except IntegrityError:
+        await session.rollback()
+        return False, ErrorSchema(
+            error=ErrorCode.ACCESS_ERROR,
+            extra=f'The user ({user_id}) was not found'
+        )
+        
+    except SQLAlchemyError as e:
+        await session.rollback()
+        return False, ErrorSchema(
+            error=ErrorCode.ACCESS_ERROR,
+            extra=str(e)
+        )
+    
+    except ValidateError as e:
+        return False, ErrorSchema(
+            error=ErrorCode.JWT_EXPIRED,
+            extra=str(e)
+        )

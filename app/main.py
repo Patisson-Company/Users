@@ -1,50 +1,34 @@
+import asyncio
+from contextlib import asynccontextmanager
+
+import config
+from api import router
 from api.graphql.resolvers import resolvers
-from ariadne import load_schema_from_path, make_executable_schema
-from ariadne.asgi import GraphQL
-from core import config
 from db.base import get_session
-from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
-from opentelemetry import trace
-from opentelemetry.exporter.jaeger.thrift import JaegerExporter
-from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.sdk.resources import SERVICE_NAME, Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from patisson_errors.fastapi import validation_exception_handler
-from patisson_graphql.fastapi_handlers.api import graphql_server
-
-type_defs = load_schema_from_path("app/api/graphql/schema.graphql")
-schema = make_executable_schema(type_defs, resolvers)  # type: ignore[reportArgumentType]
+from fastapi import FastAPI
+from patisson_appLauncher.fastapi_app_launcher import UvicornFastapiAppLauncher
 
 
-trace.set_tracer_provider(
-    TracerProvider(
-        resource=Resource.create({SERVICE_NAME: config.SERVICE_NAME})
-    )
-)
-jaeger_exporter = JaegerExporter()
-trace.get_tracer_provider().add_span_processor(  # type: ignore[reportAttributeAccessIssue]
-    BatchSpanProcessor(jaeger_exporter)
-)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(config.SelfService.tokens_update_task())
+    yield
+    task.cancel()
+    await task
 
-
-app = FastAPI(title=SERVICE_NAME)
-FastAPIInstrumentor.instrument_app(app)
-app.add_exception_handler(RequestValidationError, validation_exception_handler)  # type: ignore[reportArgumentType]
-
-
-@app.post("/graphql")
-async def graphql_route(request: Request):
-    return await graphql_server(
-        request=request, 
-        schema=schema, 
-        session_gen=get_session()
-    )
-
-graphql_app = GraphQL(schema, debug=True)
-app.add_route("/graphql", graphql_app)  # type: ignore[reportArgumentType]
+app = FastAPI(title=config.SERVICE_NAME, lifespan=lifespan)
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host=config.SERVICE_HOST, port=config.SERVICE_PORT)
+    app_launcher = UvicornFastapiAppLauncher(app, router,
+                        service_name=config.SERVICE_NAME,
+                        host=config.SERVICE_HOST)
+    app_launcher.add_sync_consul_health_path()
+    app_launcher.consul_register()
+    app_launcher.add_jaeger()
+    app_launcher.add_async_ariadne_graphql_route(
+        resolvers=resolvers, 
+        session_gen=get_session,
+        debug=True
+    )
+    app_launcher.include_router(prefix=f'/{config.SERVICE_NAME}')
+    app_launcher.app_run()
