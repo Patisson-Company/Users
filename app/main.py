@@ -1,5 +1,6 @@
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import config
 from api import router
@@ -28,7 +29,8 @@ if __name__ == "__main__":
     app_launcher.add_async_ariadne_graphql_route(
         resolvers=resolvers, 
         session_gen=get_session,
-        debug=True
+        debug=True,
+        path_to_schema=str(Path(__file__).resolve().parent) + config.PATH_TO_GSCHEMA
     )
     app_launcher.include_router(prefix=f'/{config.SERVICE_NAME}')
     app_launcher.app_run()

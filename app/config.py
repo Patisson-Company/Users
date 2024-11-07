@@ -13,6 +13,8 @@ DATABASE_URL: str = os.getenv("DATABASE_URL")  # type: ignore[reportArgumentType
 
 EXTERNAL_SERVICES: list[Service] = [Service.AUTHENTICATION, Service.BOOKS]
 
+PATH_TO_GSCHEMA = '/api/graphql/schema.graphql'
+
 SelfService = SelfAsyncService(
     self_service=Service(SERVICE_NAME),
     login=os.getenv("LOGIN"),  # type: ignore[reportArgumentType]

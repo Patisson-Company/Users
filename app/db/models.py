@@ -15,8 +15,6 @@ def ulid() -> str:
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
-
-
 class User(Base):
     __tablename__ = 'users'
 
@@ -28,6 +26,7 @@ class User(Base):
     avatar = Column(String)
     about = Column(Text)
     role = Column(String, nullable=False)
+    
     
     library = relationship('Library', back_populates='user')
     ban = relationship('Ban', back_populates='user')

@@ -32,5 +32,5 @@ type Query {
         user_ids: [String],
         book_ids: [String],
         statuses: [String]
-    )
+    ): [Library]
 }
