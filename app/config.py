@@ -19,5 +19,5 @@ SelfService = SelfAsyncService(
     self_service=Service(SERVICE_NAME),
     login=os.getenv("LOGIN"),  # type: ignore[reportArgumentType]
     password=os.getenv("PASSWORD"),  # type: ignore[reportArgumentType]
-    external_services=EXTERNAL_SERVICES
+    external_services=EXTERNAL_SERVICES,
 )

@@ -4,7 +4,7 @@ from datetime import datetime
 
 from db.base import Base
 from passlib.context import CryptContext
-from sqlalchemy import Column, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import Column, DateTime, Enum, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship, validates
 from ulid import ULID
 from patisson_request.errors import ValidateError
@@ -76,7 +76,7 @@ class Library(Base):
     status = Column(Enum(Status), nullable=False)
     
     user = relationship('User', back_populates='library')
-    
+        
     
 class Ban(Base):
     __tablename__ = 'bans'

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import Literal, Optional
 
 from db.models import Ban, Library, User
-from sqlalchemy import and_, case, func, or_, select
+from sqlalchemy import and_, case, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -57,13 +57,13 @@ async def create_user(session: AsyncSession, role: str,
     except SQLAlchemyError as e:
         await session.rollback()
         return False, ErrorSchema(
-            error=ErrorCode.ACCESS_ERROR,
+            error=ErrorCode.INVALID_PARAMETERS,
             extra=str(e)
         )
         
     except ValidateError as e: 
         return False, ErrorSchema(
-            error=ErrorCode.JWT_EXPIRED,
+            error=ErrorCode.VALIDATE_ERROR,
             extra=str(e)
         )
         
@@ -78,6 +78,16 @@ async def create_library(session: AsyncSession, book_id: str,
             book_id=book_id, user_id=user_id,
             status=status
         )
+        
+        record_exists = await session.scalar(
+            select(exists().where(Library.user_id == user_id, Library.book_id == book_id))
+        )
+        if record_exists:
+            return False, ErrorSchema(
+                error=ErrorCode.ACCESS_ERROR,
+                extra=f"The user ({user_id}) already has this book ({book_id}) in their library"
+            )
+            
         session.add(library)
         await session.commit()
         return True, library
@@ -85,21 +95,21 @@ async def create_library(session: AsyncSession, book_id: str,
     except IntegrityError:
         await session.rollback()
         return False, ErrorSchema(
-            error=ErrorCode.ACCESS_ERROR,
+            error=ErrorCode.INVALID_PARAMETERS,
             extra=f'The user ({user_id}) was not found'
         )
         
     except SQLAlchemyError as e:
         await session.rollback()
         return False, ErrorSchema(
-            error=ErrorCode.ACCESS_ERROR,
+            error=ErrorCode.INVALID_PARAMETERS,
             extra=str(e)
         )
     
     except ValidateError as e: 
         await session.rollback()
         return False, ErrorSchema(
-            error=ErrorCode.JWT_EXPIRED,
+            error=ErrorCode.VALIDATE_ERROR,
             extra=str(e)
         )
 
@@ -121,19 +131,19 @@ async def create_ban(session: AsyncSession, user_id: str,
     except IntegrityError:
         await session.rollback()
         return False, ErrorSchema(
-            error=ErrorCode.ACCESS_ERROR,
+            error=ErrorCode.INVALID_PARAMETERS,
             extra=f'The user ({user_id}) was not found'
         )
         
     except SQLAlchemyError as e:
         await session.rollback()
         return False, ErrorSchema(
-            error=ErrorCode.ACCESS_ERROR,
+            error=ErrorCode.INVALID_PARAMETERS,
             extra=str(e)
         )
     
     except ValidateError as e:
         return False, ErrorSchema(
-            error=ErrorCode.JWT_EXPIRED,
+            error=ErrorCode.VALIDATE_ERROR,
             extra=str(e)
         )

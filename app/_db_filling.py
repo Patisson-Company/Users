@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from db.base import get_session
 from db.crud import create_user, create_library, create_ban
 from faker import Faker
-from patisson_request.service_routes import RouteBooks
+from patisson_request.service_routes import BooksRoute
 from patisson_request.graphql.queries import QBook
 from config import SelfService
 from db.models import User, Library, Ban
@@ -31,7 +31,7 @@ async def _create_users(count: int):
 
 async def _create_library():
     qbooks = await SelfService.post_request(
-        *-RouteBooks.graphql.books(fields=[QBook.id], limit=0) 
+        *-BooksRoute.graphql.books(fields=[QBook.id], limit=0) 
     )
     async with get_session() as session:
         users_stmt = await session.execute(select(User.id))
