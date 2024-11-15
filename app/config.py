@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from patisson_request.core import SelfAsyncService
 from patisson_request.services import Service
 
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 SERVICE_NAME: str = Service.USERS.value
 SERVICE_HOST: str = os.getenv("SERVICE_HOST")  # type: ignore[reportArgumentType]

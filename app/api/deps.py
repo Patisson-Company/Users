@@ -51,12 +51,12 @@ async def verify_serice__user_reg__token(
 
 @dep_jaeger_client_decorator(tracer)
 async def verify_user_token(
-    client_token: str = Header(...)
+    X_Client_Token: str = Header(...)
     ) -> ClientAccessTokenPayload:
     try:
         payload = await verify_client_token_dep(
             self_service=config.SelfService,
-            access_token=client_token
+            access_token=X_Client_Token
         )
     except InvalidJWT as e:
         raise HTTPException(

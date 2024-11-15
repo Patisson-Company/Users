@@ -2,11 +2,12 @@ from datetime import datetime
 from typing import Literal, Optional
 
 from db.models import Ban, Library, User
+from patisson_request.errors import ErrorCode, ErrorSchema, ValidateError
 from sqlalchemy import and_, case, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from patisson_request.errors import ErrorCode, ErrorSchema, ValidateError
+from sqlalchemy.orm import joinedload
 
 
 def users_ban_subquery():
@@ -24,8 +25,7 @@ def users_ban_subquery():
     )
     return case(       
         (active_ban_subquery.scalar_subquery() > 0, True),
-        else_=False
-        ).label("is_banned")
+        else_=False).label("is_banned")
     
 
 async def create_user(session: AsyncSession, role: str,
@@ -116,7 +116,7 @@ async def create_library(session: AsyncSession, book_id: str,
 
 async def create_ban(session: AsyncSession, user_id: str,
                      reason: Ban.Reason, comment: str, end_date: datetime) -> ( 
-                        tuple[Literal[True], User]
+                        tuple[Literal[True], Ban]
                         | tuple[Literal[False], ErrorSchema]
                       ):
     try:
@@ -147,3 +147,31 @@ async def create_ban(session: AsyncSession, user_id: str,
             error=ErrorCode.VALIDATE_ERROR,
             extra=str(e)
         )
+        
+        
+async def get_active_user(session: AsyncSession, user_id: str) -> (
+                        tuple[Literal[True], User]
+                        | tuple[Literal[False], ErrorSchema]
+                    ):    
+    result = await session.execute(
+        select(User)
+        .options(joinedload(User.ban))
+        .where(User.id == user_id)
+    )
+    user = result.scalars().first()
+
+    if not user:
+        return False, ErrorSchema(
+            error=ErrorCode.INVALID_PARAMETERS,
+            extra='There is no user with the specified id'
+        )
+
+    for ban in user.ban:
+        if ban.end_date is None or ban.end_date > datetime.now():
+            return False, ErrorSchema(
+                error=ErrorCode.VALIDATE_ERROR,
+                extra='the user is banned'
+            )
+            
+    return True, user
+    
