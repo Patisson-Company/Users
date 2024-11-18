@@ -1,6 +1,7 @@
 from typing import Optional
 
 from ariadne import QueryType
+from config import logger
 from db.crud import users_ban_subquery
 from db.models import Library, User
 from graphql import GraphQLResolveInfo
@@ -42,6 +43,7 @@ async def users(_, info: GraphQLResolveInfo,
         .where_filter(is_banned_field, is_banned)  # type: ignore[reportArgumentType]
         .offset(offset).limit(limit).ordered_by(User.id)
     )
+    logger.info(stmt.log())
     result = await db.execute(stmt())
     return result.fetchall()
 
@@ -67,6 +69,7 @@ async def libraries(_, info: GraphQLResolveInfo,
         .con_filter(Library.status, statuses)
         .offset(offset).limit(limit).ordered_by(Library.id)
     )
+    logger.info(stmt.log())
     result = await db.execute(stmt())
     return result.fetchall()
 

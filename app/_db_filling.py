@@ -43,8 +43,7 @@ async def _create_library():
             async with get_session() as session:
                 tasks.append(create_library(
                     session, book_id=random.choice(qbooks.body.data.books).id, 
-                    user_id=user, status=Library.Status(random.randint(0, 2)))
-                                )
+                    user_id=user, status=Library.Status(random.randint(0, 2))))
     await asyncio.gather(*tasks)
         
 

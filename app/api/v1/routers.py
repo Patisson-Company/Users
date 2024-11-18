@@ -1,21 +1,26 @@
 import config
 from api.deps import (CreateBan_UserJWT, CreateLib_UserJWT, ServiceJWT,
                       SessionDep, UserReg_ServiceJWT)
+from config import logger
 from db.crud import create_ban, create_library, create_user, get_active_user
 from db.models import Ban, Library
 from fastapi import APIRouter, Header, HTTPException, status
 from patisson_request.errors import ErrorSchema
 from patisson_request.roles import ClientRole
 from patisson_request.service_requests import UsersRequest
-from patisson_request.service_responses import SuccessResponse, TokensSet, VerifyUser, UsersResponse
+from patisson_request.service_responses import (SuccessResponse,
+                                                TokensSetResponse,
+                                                UsersResponse,
+                                                VerifyUserResponse)
 from patisson_request.service_routes import AuthenticationRoute
 
 router = APIRouter()
 
 @router.post('/create-user')
-async def create_user_route(
-    service: UserReg_ServiceJWT, session: SessionDep, 
-    user: UsersRequest.CreateUser) -> TokensSet:
+async def create_user_route(service: UserReg_ServiceJWT, 
+                            session: SessionDep, user: UsersRequest.CreateUser
+                            ) -> TokensSetResponse:
+    
     async with session as session_:  
         is_valid, body = await create_user(
             session=session_, 
@@ -32,16 +37,18 @@ async def create_user_route(
         response = await config.SelfService.post_request(
             *-AuthenticationRoute.api.v1.client.jwt.create(
                 client_id=str(body.id),  # type: ignore[reportAttributeAccessIssue]
-                client_role=ClientRole(str(body.role)), # type: ignore[reportAttributeAccessIssue]
+                client_role=ClientRole(str(body.role)),  # type: ignore[reportAttributeAccessIssue]
                 expire_in=user.expire_in
             )
         )
-        return TokensSet(
+        logger.info(f'user {body.id} has been created, service initiator {service.sub}')  # type: ignore[reportAttributeAccessIssue]
+        return TokensSetResponse(
             access_token=response.body.access_token,
             refresh_token=response.body.refresh_token
         )
         
     else:
+        logger.info(str(body) + f'service initiator {service.sub}')
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail=[body.model_dump()]
@@ -49,10 +56,10 @@ async def create_user_route(
         
  
 @router.post('/create-library')
-async def create_library_route(
-    service: ServiceJWT, user: CreateLib_UserJWT, 
-    session: SessionDep, library: UsersRequest.CreateLibrary
-    ) -> SuccessResponse:
+async def create_library_route(service: ServiceJWT, user: CreateLib_UserJWT, 
+                               session: SessionDep, 
+                               library: UsersRequest.CreateLibrary
+                               ) -> SuccessResponse:
     async with session as session_: 
         is_valid, body = await create_library(
             session=session_, 
@@ -60,8 +67,10 @@ async def create_library_route(
             user_id=library.user_id, 
             status=Library.Status(library.status))
     if is_valid:
+        logger.info(f'user {user.sub} has been created a library {body.id}, service initiator {service.sub}')  # type: ignore[reportAttributeAccessIssue]
         return SuccessResponse()
     else:
+        logger.info(str(body) + f'service initiator {service.sub}')
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail=[body.model_dump()]
@@ -69,10 +78,9 @@ async def create_library_route(
  
 
 @router.post('/create-ban')
-async def create_ban_route(
-    service: ServiceJWT, user: CreateBan_UserJWT, 
-    session: SessionDep, ban: UsersRequest.CreateBan
-    ) -> SuccessResponse:
+async def create_ban_route(service: ServiceJWT, user: CreateBan_UserJWT, 
+                           session: SessionDep, ban: UsersRequest.CreateBan
+                           ) -> SuccessResponse:
     async with session as session_: 
         is_valid, body = await create_ban(
             session=session_, 
@@ -82,8 +90,10 @@ async def create_ban_route(
             end_date=ban.end_date
             )
     if is_valid:
+        logger.info(f'user {user.sub} has been created a ban {body.id}, service initiator {service.sub}')  # type: ignore[reportAttributeAccessIssue]
         return SuccessResponse()
     else:
+        logger.info(str(body) + f'service initiator {service.sub}')
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, 
             detail=[body.model_dump()]
@@ -91,14 +101,15 @@ async def create_ban_route(
     
     
 @router.post('/verify-user')
-async def verify_user_route(
-    service: ServiceJWT, session: SessionDep, body: UsersRequest.VerifyUser
-    ) -> VerifyUser:
+async def verify_user_route(service: ServiceJWT, session: SessionDep, 
+                            request: UsersRequest.VerifyUser
+                            ) -> VerifyUserResponse:
     response = await config.SelfService.post_request(
-        *-AuthenticationRoute.api.v1.client.jwt.verify(body.access_token)
+        *-AuthenticationRoute.api.v1.client.jwt.verify(request.access_token)
     )
     if not response.body.is_verify:
-        return VerifyUser(is_verify=False, payload=None, error=ErrorSchema(
+        logger.info(response.body.error.error.value + f'service initiator {service.sub}')  # type: ignore[reportOptionalMemberAccess]
+        return VerifyUserResponse(is_verify=False, payload=None, error=ErrorSchema(
             error=response.body.error.error  # type: ignore[reportOptionalMemberAccess]
         ))
     
@@ -109,16 +120,17 @@ async def verify_user_route(
         )
     
     if is_valid:
-        return VerifyUser(is_verify=True, payload=body)
+        logger.info(f'service {service.sub} verified user {response.body.payload.sub}')  # type: ignore[reportOptionalMemberAccess]
+        return VerifyUserResponse(is_verify=True, payload=body)
     
-    return VerifyUser(is_verify=False, payload=None, error=body)
+    logger.info(str(body) + f'service initiator {service.sub}')
+    return VerifyUserResponse(is_verify=False, payload=None, error=body)
 
 
 @router.post('/update-user')
-async def update_user_route(
-    service: ServiceJWT, body: UsersRequest.UpdateUser, 
-    session: SessionDep, X_Client_Token: str = Header(...)
-    ) -> TokensSet:
+async def update_user_route(service: ServiceJWT, body: UsersRequest.UpdateUser, 
+                            session: SessionDep, X_Client_Token: str = Header(...)
+                            ) -> TokensSetResponse:
     
     verify_response = await config.SelfService.post_request(
         *-AuthenticationRoute.api.v1.client.jwt.verify(X_Client_Token)
@@ -138,6 +150,7 @@ async def update_user_route(
         )
     
     if not is_valid:
+        logger.info(str(body) + f'service initiator {service.sub}')
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=body_.model_dump()
@@ -150,9 +163,11 @@ async def update_user_route(
             )
         )
     if update_response.is_error:
+        logger.info(str(update_response.body.model_dump()) + f'service initiator {service.sub}')
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=update_response.body.model_dump()
         )
     
+    logger.info(f'service {service.sub} has updated user ({verify_response.body.payload.sub}) tokens')  # type: ignore[reportOptionalMemberAccess]
     return update_response.body
