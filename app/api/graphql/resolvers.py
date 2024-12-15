@@ -1,20 +1,24 @@
 from typing import Optional
 
+from api.graphql.deps import verify_tokens_decorator
 from ariadne import QueryType
 from config import logger
 from db.crud import users_ban_subquery
 from db.models import Library, User
 from graphql import GraphQLResolveInfo
+from patisson_graphql.framework_utils.fastapi import GraphQLContext
 from patisson_graphql.selected_fields import selected_fields
 from patisson_graphql.stmt_filter import Stmt
-from sqlalchemy.ext.asyncio import AsyncSession
+from patisson_request.jwt_tokens import ServiceAccessTokenPayload
 from sqlalchemy.future import select
 
 query = QueryType()
 
 
 @query.field("users")
+@verify_tokens_decorator
 async def users(_, info: GraphQLResolveInfo, 
+                service_token: ServiceAccessTokenPayload,
                 ids: Optional[list[str]] = None,
                 usernames: Optional[list[str]] = None,
                 first_names: Optional[list[str]] = None,
@@ -23,7 +27,7 @@ async def users(_, info: GraphQLResolveInfo,
                 is_banned: Optional[bool] = None,
                 offset: Optional[int] = None,
                 limit: Optional[int] = 10):
-    db: AsyncSession = info.context["db"]
+    context: GraphQLContext[ServiceAccessTokenPayload, None] = info.context
     
     stmt_selected_fields = selected_fields(info, User)
     is_banned_field = None
@@ -44,19 +48,21 @@ async def users(_, info: GraphQLResolveInfo,
         .offset(offset).limit(limit).ordered_by(User.id)
     )
     logger.info(stmt.log())
-    result = await db.execute(stmt())
+    result = await context.db_session.execute(stmt())
     return result.fetchall()
 
 
 @query.field("libraries")
+@verify_tokens_decorator
 async def libraries(_, info: GraphQLResolveInfo,
+                    service_token: ServiceAccessTokenPayload,
                     ids: Optional[list[str]] = None,
                     user_ids: Optional[list[str]] = None,
                     book_ids: Optional[list[str]] = None,
                     statuses: Optional[list[str]] = None,
                     offset: Optional[int] = None,
                     limit: Optional[int] = 10):
-    db: AsyncSession = info.context["db"]
+    context: GraphQLContext[ServiceAccessTokenPayload, None] = info.context
     
     stmt_selected_fields = selected_fields(info, Library)
     stmt = (
@@ -70,7 +76,7 @@ async def libraries(_, info: GraphQLResolveInfo,
         .offset(offset).limit(limit).ordered_by(Library.id)
     )
     logger.info(stmt.log())
-    result = await db.execute(stmt())
+    result = await context.db_session.execute(stmt())
     return result.fetchall()
 
 resolvers = [query]

@@ -5,8 +5,8 @@ from db.base import get_session
 from fastapi import Depends, HTTPException, Header, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from opentelemetry import trace
-from patisson_request.depends import (dep_jaeger_client_decorator,
-                                      dep_jaeger_service_decorator,
+from patisson_request.depends import (dep_opentelemetry_client_decorator,
+                                      dep_opentelemetry_service_decorator,
                                       verify_client_token_dep,
                                       verify_service_token_dep)
 from patisson_request.errors import ErrorCode, ErrorSchema, InvalidJWT
@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 security = HTTPBearer()
 tracer = trace.get_tracer(__name__)
 
-@dep_jaeger_service_decorator(tracer)
+@dep_opentelemetry_service_decorator(tracer)
 async def verify_service_token(
     credentials: HTTPAuthorizationCredentials = Depends(security)
     ) -> ServiceAccessTokenPayload:
@@ -27,7 +27,7 @@ async def verify_service_token(
             self_service=config.SelfService, access_token=token)
     except InvalidJWT as e:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_401_UNAUTHORIZED,
             detail=[e.error_schema.model_dump()]
             )
     return payload
@@ -49,7 +49,7 @@ async def verify_serice__user_reg__token(
     return payload
 
 
-@dep_jaeger_client_decorator(tracer)
+@dep_opentelemetry_client_decorator(tracer)
 async def verify_user_token(
     X_Client_Token: str = Header(...)
     ) -> ClientAccessTokenPayload:

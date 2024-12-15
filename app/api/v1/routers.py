@@ -10,7 +10,6 @@ from patisson_request.roles import ClientRole
 from patisson_request.service_requests import UsersRequest
 from patisson_request.service_responses import (SuccessResponse,
                                                 TokensSetResponse,
-                                                UsersResponse,
                                                 VerifyUserResponse)
 from patisson_request.service_routes import AuthenticationRoute
 
@@ -108,7 +107,7 @@ async def verify_user_route(service: ServiceJWT, session: SessionDep,
         *-AuthenticationRoute.api.v1.client.jwt.verify(request.access_token)
     )
     if not response.body.is_verify:
-        logger.info(response.body.error.error.value + f'service initiator {service.sub}')  # type: ignore[reportOptionalMemberAccess]
+        logger.info(response.body.error.error + f'service initiator {service.sub}')  # type: ignore[reportOptionalMemberAccess]
         return VerifyUserResponse(is_verify=False, payload=None, error=ErrorSchema(
             error=response.body.error.error  # type: ignore[reportOptionalMemberAccess]
         ))
@@ -121,7 +120,7 @@ async def verify_user_route(service: ServiceJWT, session: SessionDep,
     
     if is_valid:
         logger.info(f'service {service.sub} verified user {response.body.payload.sub}')  # type: ignore[reportOptionalMemberAccess]
-        return VerifyUserResponse(is_verify=True, payload=body)
+        return VerifyUserResponse(is_verify=True, payload=response.body.payload)
     
     logger.info(str(body) + f'service initiator {service.sub}')
     return VerifyUserResponse(is_verify=False, payload=None, error=body)
